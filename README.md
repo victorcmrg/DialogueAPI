@@ -11,45 +11,51 @@ edite texto, skin, animação, tom da voz, requisitos de entrada, gatilhos e sal
 npm start
 ```
 
-ou dê dois cliques em `start.bat` (abre o navegador sozinho).
-O editor abre em **http://127.0.0.1:5173/**. Não precisa de `npm install`: só Node 18+.
+No PC: abre em **http://localhost:5173/** (ou `start.bat`). Não precisa de `npm install`: só Node 18+.
 
-## Conectar ao servidor (uma vez)
+## Entrar no editor
 
-Tudo já está no `.env`. Só confira:
+O site pede um token (o plugin é quem confere):
 
-1. **No plugin** (`plugins/NotEnoughDialogues/config.yml`), coloque o mesmo token do `.env`:
+- **Link do jogo:** `/ned web-editor` manda um link `.../editor/?s=...` que já entra direto.
+- **Token fixo:** na tela de entrada, cole o `API_TOKEN` do `.env` (o mesmo de `web-editor.api-token` no plugin).
 
-   ```yaml
-   web-editor:
-     port: 8166
-     api-token: "01d97db6b2ee84bd13a35c82eefb0a81124ff5ed48c169b8"
-   ```
+Sem token válido o site não mostra nada, então ele pode ficar público.
 
-   e rode `/ned reload` (ou reinicie). Com o token definido, o editor do plugin liga junto com o servidor.
+## Plugin (`plugins/NotEnoughDialogues/config.yml`)
 
-2. **No `.env`**, `PLUGIN_URL` precisa apontar para o servidor: `http://IP-DO-HOST:8166`
-   (está `http://localhost:8166`, que só funciona com o servidor rodando no seu PC).
-   A porta 8166 precisa estar liberada no host.
+```yaml
+web-editor:
+  port: 8166                                  # precisa estar LIBERADA no host do Minecraft
+  public-url: "https://majoriadialog.squareweb.app/"   # endereço deste site (para o link do /ned web-editor)
+  api-token: "01d97db6b2ee84bd13a35c82eefb0a81124ff5ed48c169b8"
+```
+
+## Square Cloud
+
+Variáveis de ambiente do app:
+
+| Chave | Valor |
+|---|---|
+| `PLUGIN_URL` | `http://IP-DO-HOST-DO-MINECRAFT:8166` (nunca `localhost`) |
+
+**Não crie `HOST` nem `PORT`**: a Square já define `0.0.0.0` e `80`. Se você criar `HOST=127.0.0.1`,
+o site fica inacessível ("a conexão foi reiniciada").
 
 ## Como funciona
 
 ```
-navegador ──> server.js (127.0.0.1:5173) ──> plugin NotEnoughDialogues (PLUGIN_URL/api/*)
-                 serve o editor              lê/grava os diálogos e skins
-                 + coloca o API_TOKEN        e recarrega o plugin ao salvar
+navegador ──(token)──> server.js ──(token)──> plugin NotEnoughDialogues (PLUGIN_URL/api/*)
+                       serve o editor          confere o token, lê/grava diálogos e skins,
+                       e repassa /api/*         recarrega o plugin ao salvar
 ```
-
-O token fica só no `server.js`; o navegador nunca vê.
 
 | Arquivo | O quê |
 |---|---|
 | `index.html`, `editor.css`, `editor.js` | o editor (sem dependências) |
 | `server.js` | servidor + ponte para a API do plugin |
-| `.env` | endereço do plugin, token e porta |
+| `.env` | endereço do plugin e token |
 | `start.bat` | atalho para iniciar no Windows |
-
-Sem este repositório, o mesmo editor também abre pelo próprio plugin: `/ned web-editor` no jogo.
 
 ## Rotas da API do plugin
 

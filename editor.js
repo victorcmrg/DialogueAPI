@@ -4,7 +4,8 @@
 // ============================================================
 //  BÁSICO
 // ============================================================
-const TOKEN = new URLSearchParams(location.search).get('s') || '';
+// token: do link (/ned web-editor) ou digitado na tela de entrada (fica só nesta aba)
+let TOKEN = new URLSearchParams(location.search).get('s') || sessionStorage.getItem('ned-token') || '';
 const apiUrl = (p) => '../api/' + p + (p.includes('?') ? '&' : '?') + 's=' + encodeURIComponent(TOKEN);
 const $ = (s, root = document) => root.querySelector(s);
 const NODE_W = 300, PORT_Y = 17, START_W = 170;
@@ -1346,4 +1347,40 @@ $('#btn-new-speaker').addEventListener('click', () => {
 
 applyView();
 renderAll();
-loadState().catch((e) => setStatus('Erro ao carregar: ' + e.message + ' (a sessão pode ter expirado: use /ned web-editor)', 'err'));
+/** Tela de entrada: pede o token quando o link não trouxe um (ou ele expirou). */
+function askToken(message) {
+  const ov = $('#overlay');
+  const input = el('input', { type: 'password', placeholder: 'token de acesso' });
+  const go = () => {
+    const t = input.value.trim();
+    if (!t) return;
+    TOKEN = t;
+    sessionStorage.setItem('ned-token', t);
+    ov.classList.remove('show');
+    ov.innerHTML = '';
+    start();
+  };
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); });
+  ov.innerHTML = '';
+  ov.append(el('div', { class: 'modal' },
+    el('h3', {}, '🔒 Entrar no editor'),
+    el('div', { class: 'content' },
+      el('p', { class: 'hint', style: { margin: 0 } }, message || 'Use o link do /ned web-editor no jogo, ou cole o API token (web-editor.api-token do plugin).'),
+      input),
+    el('div', { class: 'actions' }, el('button', { class: 'btn primary', onclick: go }, 'Entrar'))));
+  ov.classList.add('show');
+  ov.onmousedown = null;
+  setTimeout(() => input.focus(), 50);
+}
+
+function start() {
+  if (!TOKEN) return askToken();
+  loadState().catch((e) => {
+    if (/inv[aá]lid|expir|ausente|403/i.test(e.message)) {
+      sessionStorage.removeItem('ned-token');
+      return askToken('Token inválido ou sessão expirada. Gere outro link com /ned web-editor ou cole o API token.');
+    }
+    setStatus('Erro ao carregar: ' + e.message, 'err');
+  });
+}
+start();

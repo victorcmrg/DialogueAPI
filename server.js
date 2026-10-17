@@ -2,8 +2,11 @@
 /**
  * DialogueAPI - servidor do editor web de diálogos do NotEnoughDialogues.
  *
- * Serve o editor (index.html, editor.css, editor.js) e repassa as chamadas /api/* para o plugin
- * (PLUGIN_URL), colocando o API_TOKEN do .env. O token nunca vai para o navegador.
+ * Serve o editor (index.html, editor.css, editor.js) e repassa as chamadas /api/* para o plugin (PLUGIN_URL).
+ *
+ * Acesso: o token vem do NAVEGADOR (link do /ned web-editor ou o API_TOKEN digitado na tela de entrada)
+ * e é conferido pelo plugin. Este servidor não injeta token nenhum: assim o site pode ficar público
+ * (ex.: Square Cloud) sem que qualquer um consiga editar os diálogos.
  *
  * Iniciar:  npm start   (ou start.bat)
  * Sem dependências: só Node 18+.
@@ -29,20 +32,19 @@ function loadEnv(file) {
 loadEnv(path.join(__dirname, '.env'));
 
 const PLUGIN_URL = (process.env.PLUGIN_URL || 'http://localhost:8166').replace(/\/+$/, '');
-const API_TOKEN = process.env.API_TOKEN || '';
+// 0.0.0.0 = aceita conexões de fora (necessário em hospedagem como a Square Cloud, que usa HOST/PORT próprios)
+const HOST = process.env.HOST || '0.0.0.0';
 const PORT = parseInt(process.env.PORT || '5173', 10);
-const HOST = process.env.HOST || '127.0.0.1';
 
-if (API_TOKEN.length < 16) {
-  console.error('API_TOKEN ausente ou curto demais no .env (mínimo 16 caracteres).');
-  process.exit(1);
-}
-
+const PAGE = ['index.html', 'text/html; charset=utf-8'];
 const STATIC = {
-  '/': ['index.html', 'text/html; charset=utf-8'],
-  '/index.html': ['index.html', 'text/html; charset=utf-8'],
+  '/': PAGE,
+  '/index.html': PAGE,
+  '/editor/': PAGE, // link gerado pelo /ned web-editor (public-url + editor/?s=...)
   '/editor.js': ['editor.js', 'application/javascript; charset=utf-8'],
   '/editor.css': ['editor.css', 'text/css; charset=utf-8'],
+  '/editor/editor.js': ['editor.js', 'application/javascript; charset=utf-8'],
+  '/editor/editor.css': ['editor.css', 'text/css; charset=utf-8'],
 };
 
 function send(res, code, type, body) {
@@ -51,8 +53,10 @@ function send(res, code, type, body) {
 }
 
 async function proxy(req, res, url) {
-  // troca qualquer "s" que veio do navegador pelo token do .env
-  url.searchParams.set('s', API_TOKEN);
+  // sem token não passa nem para o plugin
+  if (!url.searchParams.get('s')) {
+    return send(res, 403, 'application/json; charset=utf-8', JSON.stringify({ ok: false, error: 'token ausente' }));
+  }
   const target = PLUGIN_URL + url.pathname + '?' + url.searchParams.toString();
   const chunks = [];
   for await (const c of req) chunks.push(c);
@@ -77,6 +81,7 @@ async function proxy(req, res, url) {
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   if (url.pathname.startsWith('/api/')) return proxy(req, res, url);
+  if (url.pathname === '/editor') { res.writeHead(301, { Location: '/editor/' + url.search }); return res.end(); }
   const file = STATIC[url.pathname];
   if (!file) return send(res, 404, 'text/plain; charset=utf-8', 'not found');
   fs.readFile(path.join(__dirname, file[0]), (err, data) => {
@@ -88,7 +93,7 @@ const server = http.createServer(async (req, res) => {
 server.listen(PORT, HOST, () => {
   console.log('');
   console.log('  NotEnoughDialogues · DialogueAPI');
-  console.log(`  Editor:  http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}/`);
+  console.log(`  Editor:  http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}/  (escutando em ${HOST}:${PORT})`);
   console.log(`  Plugin:  ${PLUGIN_URL}`);
   console.log('');
 });
