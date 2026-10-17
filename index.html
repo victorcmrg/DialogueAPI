@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NotEnoughDialogues · Editor</title>
+  <link rel="stylesheet" href="editor.css">
+</head>
+<body>
+<header id="topbar">
+  <div class="brand"><span class="logo">◆</span> NotEnoughDialogues <span class="muted">· Editor</span></div>
+  <div class="crumbs" id="crumbs"></div>
+  <div class="top-actions">
+    <button class="btn" id="btn-add-node" title="Novo balão (ou clique direito no fundo)">＋ Balão</button>
+    <button class="btn" id="btn-center" title="Centralizar">⌖ Centralizar</button>
+    <span id="status" class="status"></span>
+    <button class="btn primary" id="btn-save" title="Ctrl+S">💾 Salvar no servidor</button>
+  </div>
+</header>
+
+<aside id="sidebar">
+  <nav class="tabs">
+    <button class="tab active" data-tab="dialogues">Diálogos</button>
+    <button class="tab" data-tab="skins">Skins</button>
+    <button class="tab" data-tab="speakers">Speakers</button>
+  </nav>
+  <section class="tab-body" id="tab-dialogues">
+    <div class="side-tools">
+      <input type="search" id="dialogue-search" placeholder="Buscar diálogo...">
+      <button class="btn small" id="btn-new-dialogue" title="Novo diálogo">＋</button>
+    </div>
+    <ul class="list" id="dialogue-list"></ul>
+  </section>
+  <section class="tab-body hidden" id="tab-skins">
+    <p class="hint">Skins salvas no servidor. Use o nome delas em qualquer balão ou speaker.</p>
+    <div class="skin-grid" id="skin-grid"></div>
+  </section>
+  <section class="tab-body hidden" id="tab-speakers">
+    <div class="side-tools">
+      <button class="btn small wide" id="btn-new-speaker">＋ Novo speaker</button>
+    </div>
+    <div id="speaker-list"></div>
+  </section>
+</aside>
+
+<main id="canvas">
+  <div id="world">
+    <svg id="wires" width="1" height="1"></svg>
+    <div id="nodes"></div>
+  </div>
+  <div id="empty" class="empty">Escolha um diálogo na barra lateral.</div>
+  <div class="zoom-badge" id="zoom-badge">100%</div>
+</main>
+
+<aside id="inspector"></aside>
+
+<div id="overlay"></div>
+<script src="editor.js"></script>
+</body>
+</html>
