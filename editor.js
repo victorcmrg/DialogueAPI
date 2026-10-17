@@ -182,8 +182,25 @@ function drawFace(img, g) {
   }
   g.drawImage(img, 40, 8, 8, 8, 0, 0, 8, 8);
 }
+/** Skin "player": a de quem está vendo o diálogo (cada jogador vê a própria). Rosto genérico com "?". */
+const PLAYER_SKIN = 'player';
+function playerFace() {
+  if (faceCache.__player) return faceCache.__player;
+  const rows = ['GGGGGGGG', 'GDDDDDDG', 'GDDWWDDG', 'GDDDDWDG', 'GDDDWDDG', 'GDDDDDDG', 'GDDDWDDG', 'GGGGGGGG'];
+  const pal = { G: '#3a6df0', D: '#1b2a55', W: '#ffffff' };
+  const c = document.createElement('canvas'); c.width = c.height = 8;
+  const g = c.getContext('2d');
+  rows.forEach((r, y) => [...r].forEach((ch, x) => { g.fillStyle = pal[ch]; g.fillRect(x, y, 1, 1); }));
+  return (faceCache.__player = c.toDataURL());
+}
+function skinLabel(name) {
+  if (!name) return '';
+  if (String(name).toLowerCase() === PLAYER_SKIN) return 'player (quem vê o diálogo)';
+  return name + (isSavedSkin(name) ? '' : ' (nick/link)');
+}
 function loadFace(name) {
   if (!name) return Promise.resolve(defaultFace());
+  if (String(name).toLowerCase() === PLAYER_SKIN) return Promise.resolve(playerFace());
   if (faceCache[name]) return faceCache[name];
   faceCache[name] = new Promise((resolve) => {
     const img = new Image();
@@ -201,7 +218,7 @@ function faceEl(name, cls = 'face', onclick) {
   const img = el('img', { alt: '' });
   img.src = defaultFace();
   loadFace(name).then((src) => { img.src = src; });
-  return el('div', { class: cls, title: name || 'Skin padrão (clique para escolher)', onclick }, img);
+  return el('div', { class: cls, title: skinLabel(name) || 'Skin padrão (clique para escolher)', onclick }, img);
 }
 function isSavedSkin(name) {
   return !!name && S.skins.some((s) => s.name === String(name).toLowerCase());
@@ -210,16 +227,28 @@ function effectiveSkin(node) {
   if (node.skin) return node.skin;
   const sp = node.speaker || S.cur.data.speaker;
   if (sp && S.speakers[sp] && S.speakers[sp].skin) return S.speakers[sp].skin;
+  if (sp === PLAYER_SKIN) return PLAYER_SKIN; // speaker "player" usa a skin de quem vê
   return '';
 }
 
 // ============================================================
 //  CARREGAR / SALVAR
 // ============================================================
+/** Lê a resposta da API; se não vier JSON (erro da hospedagem, proxy...), mostra o texto que veio. */
+async function readJson(res) {
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    const clean = text.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 160);
+    throw new Error(`o servidor não respondeu em JSON (HTTP ${res.status})${clean ? ': ' + clean : ''}`);
+  }
+}
+
 async function loadState(keepId) {
   setStatus('Carregando...');
   const res = await fetch(apiUrl('state'));
-  const json = await res.json();
+  const json = await readJson(res);
   if (!res.ok || json.ok === false) throw new Error(json.error || res.status);
   S.dialogues = json.dialogues.map((d) => ({ id: d.id, oldId: d.id, file: d.file, data: d.data }));
   S.speakers = json.speakers || {};
@@ -228,7 +257,7 @@ async function loadState(keepId) {
   S.defaultPitch = json.defaultPitch || 1;
   S.deleted = [];
   S.dirty = false;
-  for (const k of Object.keys(faceCache)) if (k !== '__default') delete faceCache[k];
+  for (const k of Object.keys(faceCache)) if (!k.startsWith('__')) delete faceCache[k];
   renderSidebar();
   const again = keepId && S.dialogues.find((d) => d.id === keepId);
   if (again) openDialogue(again, true);
@@ -260,7 +289,7 @@ async function saveAll() {
   };
   try {
     const res = await fetch(apiUrl('save'), { method: 'POST', body: JSON.stringify(payload), headers: { 'Content-Type': 'application/json' } });
-    const json = await res.json();
+    const json = await readJson(res);
     if (!res.ok || json.ok === false) throw new Error(json.error || res.status);
     const keep = S.cur && S.cur.id;
     S.cur = null;
@@ -334,7 +363,7 @@ function renderSpeakerTab() {
       preview,
       field('Tom', pitchControl(sp, 'voice-pitch')),
       field('Animação', selectBound(sp, 'animation', [['', '(padrão)'], ...S.animations.map((a) => [a, a])])),
-      field('Skin', el('div', { class: 'muted' }, sp.skin ? sp.skin + (isSavedSkin(sp.skin) ? '' : ' (nick/link)') : 'nenhuma (sem modelo)')));
+      field('Skin', el('div', { class: 'muted' }, sp.skin ? skinLabel(sp.skin) : 'nenhuma (sem modelo)')));
     box.append(card);
   }
 }
@@ -1004,7 +1033,7 @@ function inspectNode(box, id) {
   box.append(el('div', { class: 'insp-head', style: { '--hc': OUT[t].c } }, el('span', { class: 'bar' }), el('h3', {}, 'Balão'), idInput));
 
   // --- balão ---
-  const skinName = el('span', { class: 'muted' }, n.skin ? n.skin : 'do speaker');
+  const skinName = el('span', { class: 'muted' }, n.skin ? skinLabel(n.skin) : 'do speaker');
   box.append(section('Balão', '#3e90ff',
     field('Speaker', selectBound(n, 'speaker', speakerOptions(true), () => refreshNode(id))),
     field('Skin', el('div', { class: 'inline' },
@@ -1203,6 +1232,11 @@ function openSkinDrawer(anchor, current, onpick) {
     const q = search.value.toLowerCase();
     grid.append(el('div', { class: 'skin-cell' + (!current ? ' on' : ''), onclick: () => { onpick(''); closeFloating(); } },
       faceEl('', 'face'), el('span', {}, 'padrão')));
+    if (!q || PLAYER_SKIN.includes(q) || 'quem vê'.includes(q)) {
+      const on = String(current || '').toLowerCase() === PLAYER_SKIN;
+      grid.append(el('div', { class: 'skin-cell' + (on ? ' on' : ''), title: 'Skin de quem está vendo o diálogo', onclick: () => { onpick(PLAYER_SKIN); closeFloating(); } },
+        faceEl(PLAYER_SKIN, 'face'), el('span', {}, 'player')));
+    }
     for (const s of S.skins) {
       if (q && !s.name.includes(q)) continue;
       grid.append(el('div', { class: 'skin-cell' + (current === s.name ? ' on' : ''), title: s.name, onclick: () => { onpick(s.name); closeFloating(); } },
@@ -1284,10 +1318,11 @@ function openUpload(onsaved) {
   const close = () => { ov.classList.remove('show'); ov.innerHTML = ''; window.removeEventListener('paste', onPaste); };
   ok.addEventListener('click', async () => {
     const n = name.value.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '_');
+    if (n === PLAYER_SKIN) { err.textContent = '"player" é reservado (skin de quem vê o diálogo). Use outro nome.'; return; }
     ok.disabled = true;
     try {
       const res = await fetch(apiUrl('skin'), { method: 'POST', body: JSON.stringify({ name: n, slim: slim.checked, data: dataUrl }) });
-      const json = await res.json();
+      const json = await readJson(res);
       if (!res.ok || json.ok === false) throw new Error(json.error || res.status);
       S.skins = S.skins.filter((s) => s.name !== json.name).concat([{ name: json.name, slim: slim.checked }]).sort((a, b) => a.name.localeCompare(b.name));
       delete faceCache[json.name];

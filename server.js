@@ -68,9 +68,15 @@ async function proxy(req, res, url) {
       signal: AbortSignal.timeout(30000),
     });
     const buf = Buffer.from(await upstream.arrayBuffer());
-    send(res, upstream.status, upstream.headers.get('content-type') || 'application/octet-stream', buf);
+    const type = upstream.headers.get('content-type') || 'application/octet-stream';
+    // A hospedagem (Square/Cloudflare) troca o corpo de respostas 5xx por uma página própria ("error code: 502").
+    // O erro do plugin já vem em JSON {ok:false, error}: entrega com 200 para a mensagem chegar ao editor.
+    const status = upstream.status >= 500 && type.includes('json') ? 200 : upstream.status;
+    if (upstream.status >= 500) console.warn(`[plugin ${upstream.status}] ${req.method} ${url.pathname}: ${buf.toString('utf8').slice(0, 300)}`);
+    send(res, status, type, buf);
   } catch (e) {
-    send(res, 502, 'application/json; charset=utf-8', JSON.stringify({
+    console.warn(`[plugin inacessível] ${req.method} ${url.pathname}: ${e.cause ? e.cause.code || e.cause.message : e.message}`);
+    send(res, 200, 'application/json; charset=utf-8', JSON.stringify({
       ok: false,
       error: `Não consegui falar com o plugin em ${PLUGIN_URL} (${e.cause ? e.cause.code || e.cause.message : e.message}). `
         + 'Confira PLUGIN_URL no .env, se o servidor está ligado e se a porta do web-editor está liberada.',
