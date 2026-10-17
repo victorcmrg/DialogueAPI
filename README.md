@@ -11,7 +11,7 @@ edite texto, skin, animação, tom da voz, requisitos de entrada, gatilhos e sal
 npm start
 ```
 
-No PC: abre em **http://localhost:5173/** (ou `start.bat`). Não precisa de `npm install`: só Node 18+.
+No PC: use o `start.bat` (abre em **http://localhost:5173/**). Não precisa de `npm install`: só Node 18+.
 
 ## Entrar no editor
 
@@ -39,8 +39,9 @@ Variáveis de ambiente do app:
 |---|---|
 | `PLUGIN_URL` | `http://IP-DO-HOST-DO-MINECRAFT:8166` (nunca `localhost`) |
 
-**Não crie `HOST` nem `PORT`**: a Square já define `0.0.0.0` e `80`. Se você criar `HOST=127.0.0.1`,
-o site fica inacessível ("a conexão foi reiniciada").
+O `.env` já traz `HOST=0.0.0.0` e `PORT=80`, que é o que a Square precisa. Não crie `HOST=127.0.0.1`
+no painel: com ele o site fica inacessível. Depois de mudar variáveis no painel, clique em **Salvar** e reinicie.
+No console tem que aparecer `escutando em 0.0.0.0:80`.
 
 ## Como funciona
 
