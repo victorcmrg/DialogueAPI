@@ -229,3 +229,17 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-thumb { background: #3a3f4b; border-radius: 6px; border: 2px solid var(--panel); }
 ::-webkit-scrollbar-track { background: transparent; }
+
+/* efeitos do core shader (prévia) */
+.fx-bar { display: flex; gap: 6px; align-items: center; margin: 6px 0; font-size: 12px; }
+.fx-wave, .fx-shake { display: inline-block; }
+.fx-wave { animation: fx-wave 1s ease-in-out infinite; }
+@keyframes fx-wave { 0%, 100% { transform: translateY(-2px); } 50% { transform: translateY(2px); } }
+.fx-shake { animation: fx-shake .3s steps(1) infinite; }
+.fx-shake.s1 { animation-name: fx-shake-b; }
+.fx-shake.s2 { animation-name: fx-shake-c; }
+.fx-shake.s3 { animation-name: fx-shake-d; }
+@keyframes fx-shake { 0% { transform: translate(1px, -1px); } 33% { transform: translate(-1px, 0); } 66% { transform: translate(0, 1px); } }
+@keyframes fx-shake-b { 0% { transform: translate(-1px, 1px); } 33% { transform: translate(1px, 1px); } 66% { transform: translate(0, -1px); } }
+@keyframes fx-shake-c { 0% { transform: translate(0, -1px); } 33% { transform: translate(1px, 0); } 66% { transform: translate(-1px, -1px); } }
+@keyframes fx-shake-d { 0% { transform: translate(1px, 1px); } 33% { transform: translate(-1px, -1px); } 66% { transform: translate(1px, 0); } }

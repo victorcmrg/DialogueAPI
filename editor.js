@@ -94,17 +94,32 @@ function parseAction(str) {
 // ============================================================
 const MC = { 0: '#000000', 1: '#0000AA', 2: '#00AA00', 3: '#00AAAA', 4: '#AA0000', 5: '#AA00AA', 6: '#FFAA00', 7: '#AAAAAA',
   8: '#555555', 9: '#5555FF', a: '#55FF55', b: '#55FFFF', c: '#FF5555', d: '#FF55FF', e: '#FFFF55', f: '#FFFFFF' };
+// Efeitos do core shader do pack: <shake>texto</shake> e <wave>texto</wave> (letras brancas animadas)
+const FX_TAGS = { '<shake>': 'shake', '</shake>': null, '<wave>': 'wave', '</wave>': null };
 function mcHtml(text, base = '#FFFFFF') {
-  let out = '', buf = '', color = base, bold = false, italic = false, under = false, strike = false;
+  let out = '', buf = '', color = base, bold = false, italic = false, under = false, strike = false, fx = null, fxIndex = 0;
   const flush = () => {
     if (!buf) return;
     const deco = (under ? 'underline ' : '') + (strike ? 'line-through' : '');
-    out += `<span style="color:${color};${bold ? 'font-weight:700;' : ''}${italic ? 'font-style:italic;' : ''}${deco ? 'text-decoration:' + deco + ';' : ''}">${esc(buf)}</span>`;
+    let inner = esc(buf);
+    if (fx) {
+      // uma <span> por letra: cada uma com seu atraso (onda em "S") ou seu tremor
+      inner = [...buf].map((ch) => {
+        const i = fxIndex++;
+        const delay = fx === 'wave' ? -(1 - ((i * 0.09) % 1)) : -((i * 0.137) % 0.3); // onda: cada letra um pouco atrás da anterior
+        return ch === ' ' ? ' ' : `<span class="fx-${fx}${fx === 'shake' ? ' s' + (i % 4) : ''}" style="animation-delay:${delay.toFixed(2)}s">${esc(ch)}</span>`;
+      }).join('');
+    }
+    out += `<span style="color:${fx ? '#FFFFFF' : color};${bold ? 'font-weight:700;' : ''}${italic ? 'font-style:italic;' : ''}${deco ? 'text-decoration:' + deco + ';' : ''}">${inner}</span>`;
     buf = '';
   };
   const t = String(text || '');
   for (let i = 0; i < t.length; i++) {
     const c = t[i];
+    if (c === '<') {
+      const tag = Object.keys(FX_TAGS).find((k) => t.substr(i, k.length).toLowerCase() === k);
+      if (tag) { flush(); fx = FX_TAGS[tag]; i += tag.length - 1; continue; }
+    }
     if ((c === '&' || c === '§') && i + 1 < t.length) {
       const n = t[i + 1].toLowerCase();
       if (n === '#' && /^[0-9a-f]{6}$/i.test(t.substr(i + 2, 6))) { flush(); color = '#' + t.substr(i + 2, 6); bold = italic = under = strike = false; i += 7; continue; }
@@ -112,7 +127,7 @@ function mcHtml(text, base = '#FFFFFF') {
       if ('lonmkr'.includes(n)) {
         flush();
         if (n === 'l') bold = true; else if (n === 'o') italic = true; else if (n === 'n') under = true;
-        else if (n === 'm') strike = true; else if (n === 'r') { color = base; bold = italic = under = strike = false; }
+        else if (n === 'm') strike = true; else if (n === 'r') { color = base; fx = null; bold = italic = under = strike = false; }
         i++; continue;
       }
     }
@@ -1044,7 +1059,7 @@ function inspectNode(box, id) {
 
   // --- texto ---
   const prev = el('div', { class: 'preview', id: 'insp-preview', html: mcHtml(n.text) });
-  const ta = el('textarea', { id: 'insp-text', rows: 5, value: n.text || '', placeholder: 'Texto (aceita &a, &l, &#RRGGBB, %player_name%)' });
+  const ta = el('textarea', { id: 'insp-text', rows: 5, value: n.text || '', placeholder: 'Texto (aceita &a, &l, &#RRGGBB, %player_name%, <shake>, <wave>)' });
   ta.addEventListener('input', () => {
     n.text = ta.value;
     prev.innerHTML = mcHtml(n.text);
@@ -1054,7 +1069,20 @@ function inspectNode(box, id) {
     if (np) np.innerHTML = mcHtml(n.text);
     markDirty();
   });
-  box.append(section('Texto', '#d7dae0', ta, prev));
+  // botões de efeito: envolvem o trecho selecionado (ou inserem as tags no cursor)
+  const wrapFx = (tag) => {
+    const a = ta.selectionStart, b = ta.selectionEnd, v = ta.value;
+    ta.value = v.slice(0, a) + `<${tag}>` + v.slice(a, b) + `</${tag}>` + v.slice(b);
+    ta.focus();
+    ta.selectionStart = a + tag.length + 2;
+    ta.selectionEnd = b + tag.length + 2;
+    ta.dispatchEvent(new Event('input'));
+  };
+  const fxBar = el('div', { class: 'fx-bar' },
+    el('button', { class: 'btn ghost small', title: 'Letras brancas tremendo (core shader)', onclick: () => wrapFx('shake') }, '〰 Tremer'),
+    el('button', { class: 'btn ghost small', title: 'Letras brancas em onda (core shader)', onclick: () => wrapFx('wave') }, '🌊 Onda'),
+    el('span', { class: 'muted' }, 'selecione o texto e clique'));
+  box.append(section('Texto', '#d7dae0', ta, fxBar, prev));
 
   // --- leitura ---
   box.append(section('Leitura', '#7dd3fc',
