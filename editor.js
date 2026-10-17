@@ -81,6 +81,15 @@ const ACTIONS = {
 };
 const ACTION_ORDER = ['give', 'points', 'moneyGive', 'moneyTake', 'flagSet', 'flagAdd', 'flagDel', 'sound', 'message', 'player', 'console'];
 
+/** Balão de recompensa: não mostra texto, só roda os gatilhos (item, pontos, dinheiro...) e segue. */
+const REWARD_COLOR = '#f5b942';
+const isReward = (n) => !!n && n.kind === 'reward';
+function actionSummary(str) {
+  const a = parseAction(str);
+  const vals = a.v.filter((x) => x !== '');
+  return ACTIONS[a.k].l + (vals.length ? ': ' + vals.join(' × ') : '');
+}
+
 function parseAction(str) {
   for (const k of ACTION_ORDER) {
     const m = ACTIONS[k].re.exec(str || '');
@@ -439,6 +448,7 @@ canvas.addEventListener('contextmenu', (e) => {
   } else {
     contextMenu(e.clientX, e.clientY, [
       ['＋ Novo balão aqui', () => addNode(wx, wy)],
+      ['🎁 Balão de recompensa aqui', () => addNode(wx, wy, false, 'reward')],
       ['⌖ Centralizar', () => centerView()],
     ]);
   }
@@ -480,8 +490,11 @@ window.addEventListener('mouseup', (e) => {
       connect(d.from, nodeEl.dataset.id);
     } else if (target && isBackground(target)) {
       const [wx, wy] = toWorld(e.clientX, e.clientY);
-      const id = addNode(wx, wy - PORT_Y, true);
-      connect(d.from, id);
+      const make = (kind) => { const id = addNode(wx, wy - PORT_Y, true, kind); connect(d.from, id); };
+      contextMenu(e.clientX, e.clientY, [
+        ['＋ Balão de fala', () => make()],
+        ['🎁 Balão de recompensa', () => make('reward')],
+      ]);
     }
   }
 });
@@ -550,10 +563,13 @@ function newId() {
   return 'b' + i;
 }
 
-function addNode(x, y, silent) {
+function addNode(x, y, silent, kind) {
   if (!S.cur) return null;
   const id = newId();
-  nodes()[id] = { pos: [Math.round(x / 8) * 8, Math.round(y / 8) * 8], text: '', output: { type: 'end', links: [] } };
+  const pos = [Math.round(x / 8) * 8, Math.round(y / 8) * 8];
+  nodes()[id] = kind === 'reward'
+    ? { kind: 'reward', pos, commands: [ACTIONS.give.b(ACTIONS.give.d)], output: { type: 'generic', links: [] } }
+    : { pos, text: '', output: { type: 'end', links: [] } };
   if (!S.cur.data.start.next) S.cur.data.start.next = id;
   markDirty();
   renderGraph();
@@ -724,6 +740,7 @@ function hookDrag(e, target, id) {
 function nodeEl(id) {
   const n = nodes()[id];
   if (!n.pos) n.pos = [0, 0];
+  if (isReward(n)) return rewardNodeEl(id, n);
   const t = outType(n);
   const color = OUT[t].c;
   const gated = isGated(n);
@@ -785,6 +802,35 @@ function nodeEl(id) {
     e.append(el('div', { class: 'priority', title: 'Prioridade desta entrada (1 = maior)' }, 'prio', pr));
     e.querySelector('.in-label')?.remove();
   }
+  hookDrag(e, n, id);
+  nodeEls[id] = e;
+  return e;
+}
+
+function rewardNodeEl(id, n) {
+  const t = outType(n);
+  const gated = isGated(n);
+  const firstReq = gated ? REQ[n.input.requirements[0].type] : null;
+  const inColor = firstReq ? firstReq.c : '#9aa0aa';
+  const cmds = n.commands || [];
+  const list = el('div', { class: 'reward-list' },
+    cmds.length ? cmds.map((c) => el('div', { class: 'reward-item' }, '🎁 ' + actionSummary(c)))
+      : el('div', { class: 'muted' }, 'Nenhuma recompensa. Clique para adicionar.'));
+  const chips = el('div', { class: 'chips' });
+  if (gated) for (const r of n.input.requirements) {
+    const def = REQ[r.type] || { l: r.type, c: '#999' };
+    chips.append(el('span', { class: 'chip c', style: { background: def.c } }, def.l));
+  }
+  if (t === 'dialogue' && n.output.dialogue) chips.append(el('span', { class: 'chip c', style: { background: OUT.dialogue.c } }, '→ ' + n.output.dialogue));
+  const e = el('div', { class: 'node reward' + (S.sel && S.sel.k === 'node' && S.sel.id === id ? ' sel' : ''), 'data-id': id,
+      style: { left: n.pos[0] + 'px', top: n.pos[1] + 'px', '--hc': REWARD_COLOR } },
+    el('div', { class: 'node-head' },
+      el('span', { class: 'id' }, id + (S.cur.data.start.next === id ? '  ★' : '')),
+      el('span', { class: 'tag' }, '🎁 Recompensa · ' + OUT[t].l)),
+    el('div', { class: 'node-body' }, list, chips.childNodes.length ? chips : null),
+    el('div', { class: 'port in' + (gated ? ' gated' : ''), style: { '--pc': inColor }, title: gated ? 'Entrada com requisito' : 'Entrada' }),
+    gated ? el('div', { class: 'in-label', style: { background: inColor } }, firstReq ? firstReq.l : 'Requisito') : null,
+    t !== 'end' && t !== 'dialogue' ? portOut(id, OUT[t].c) : portOut(id, '#6b7280'));
   hookDrag(e, n, id);
   nodeEls[id] = e;
   return e;
@@ -1045,8 +1091,14 @@ function inspectNode(box, id) {
   const t = outType(n);
   const idInput = el('input', { type: 'text', value: id, title: 'ID do balão' });
   idInput.addEventListener('change', () => renameNode(id, idInput.value.trim(), idInput));
-  box.append(el('div', { class: 'insp-head', style: { '--hc': OUT[t].c } }, el('span', { class: 'bar' }), el('h3', {}, 'Balão'), idInput));
+  const reward = isReward(n);
+  box.append(el('div', { class: 'insp-head', style: { '--hc': reward ? REWARD_COLOR : OUT[t].c } }, el('span', { class: 'bar' }), el('h3', {}, reward ? '🎁 Recompensa' : 'Balão'), idInput));
 
+  if (reward) {
+    box.append(section('Recompensas', REWARD_COLOR,
+      el('p', { class: 'hint' }, 'Não aparece na tela: quando o jogador passa por aqui, recebe tudo abaixo e o diálogo segue direto pela saída.'),
+      actionsEditor(n, 'commands', () => refreshNode(id))));
+  } else {
   // --- balão ---
   const skinName = el('span', { class: 'muted' }, n.skin ? skinLabel(n.skin) : 'do speaker');
   box.append(section('Balão', '#3e90ff',
@@ -1089,6 +1141,7 @@ function inspectNode(box, id) {
     field('Tom (0-2)', pitchControl(n, 'pitch', () => refreshNode(id))),
     field('Velocidade', inputNum(n, 'speed', { placeholder: 'padrão', min: 0, step: 0.1, oninput: () => refreshNode(id) })),
     field('Auto avançar', inputNum(n, 'auto-next', { placeholder: 'ticks (0 = espera)', min: 0, step: 1, oninput: () => refreshNode(id) }))));
+  }
 
   // --- entrada ---
   if (!n.input) n.input = {};
@@ -1102,7 +1155,7 @@ function inspectNode(box, id) {
   // --- saída ---
   const out = n.output || (n.output = { type: 'end', links: [] });
   const outBox = section('Saída (para onde vai)', OUT[t].c,
-    segmented(Object.entries(OUT).map(([k, v]) => [k, v.l, v.c]), t, (v) => {
+    segmented(Object.entries(OUT).filter(([k]) => !(reward && k === 'choice')).map(([k, v]) => [k, v.l, v.c]), t, (v) => {
       out.type = v;
       if (v === 'generic' && links(n).length > 1) out.links = links(n).slice(0, 1);
       if (v === 'random' && !out.mode) out.mode = 'auto';
@@ -1137,7 +1190,7 @@ function inspectNode(box, id) {
   box.append(outBox);
 
   // --- gatilhos ---
-  box.append(section('Gatilhos (ao entrar no balão)', '#e8c33a', actionsEditor(n, 'commands', () => refreshNode(id))));
+  if (!reward) box.append(section('Gatilhos (ao entrar no balão)', '#e8c33a', actionsEditor(n, 'commands', () => refreshNode(id))));
   box.append(section('Ações', '#e0473d', el('div', { class: 'inline' },
     el('button', { class: 'btn small', onclick: () => duplicateNode(id) }, '⧉ Duplicar'),
     el('button', { class: 'btn small', onclick: () => { S.cur.data.start.next = id; markDirty(); renderGraph(); } }, '★ Primeiro balão'),
@@ -1388,6 +1441,12 @@ $('#btn-add-node').addEventListener('click', () => {
   const r = canvas.getBoundingClientRect();
   const [wx, wy] = toWorld(r.left + r.width / 2, r.top + r.height / 2);
   addNode(wx - NODE_W / 2, wy - 60);
+});
+$('#btn-add-reward').addEventListener('click', () => {
+  if (!S.cur) return;
+  const r = canvas.getBoundingClientRect();
+  const [wx, wy] = toWorld(r.left + r.width / 2, r.top + r.height / 2);
+  addNode(wx - NODE_W / 2, wy - 60, false, 'reward');
 });
 $('#btn-new-dialogue').addEventListener('click', () => {
   const id = (prompt('ID do novo diálogo (letras, números, _ . -):') || '').trim();

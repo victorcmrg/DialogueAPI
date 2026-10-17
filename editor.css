@@ -243,3 +243,8 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
 @keyframes fx-shake-b { 0% { transform: translate(-1px, 1px); } 33% { transform: translate(1px, 1px); } 66% { transform: translate(0, -1px); } }
 @keyframes fx-shake-c { 0% { transform: translate(0, -1px); } 33% { transform: translate(1px, 0); } 66% { transform: translate(-1px, -1px); } }
 @keyframes fx-shake-d { 0% { transform: translate(1px, 1px); } 33% { transform: translate(-1px, -1px); } 66% { transform: translate(1px, 0); } }
+
+/* balão de recompensa */
+.node.reward .node-body { padding-top: 6px; }
+.reward-list { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+.reward-item { background: rgba(245, 185, 66, .12); border: 1px solid rgba(245, 185, 66, .35); border-radius: 4px; padding: 3px 6px; color: #f5d27a; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
