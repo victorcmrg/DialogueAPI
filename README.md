@@ -5,6 +5,19 @@ Editor web de diálogos do plugin **NotEnoughDialogues** (Minecraft / Paper 1.21
 Blueprint com todos os diálogos e seus balões: arraste para organizar, ligue saídas em entradas,
 edite texto, skin, animação, tom da voz, requisitos de entrada, gatilhos e salve direto no servidor.
 
+Abas do editor:
+
+- **Diálogos**: grafo de balões, requisitos, **paywall** (pagar para ver) e **comando de abertura**
+  (`/falar_ferreiro` abre o diálogo sem aparecer no chat nem no console).
+- **NPCs**: cena 3D estilo Blockbench com prévia do NPC — player (manequim com skin), qualquer mob vanilla
+  ou modelo do **BetterModel** (lista todos os `.bbmodel` de `plugins/BetterModel/models`). Nome, tamanho,
+  posição, olhar para o jogador, animações (idle em loop, aleatórias a cada N segundos, ao clicar) com
+  linha do tempo para tocar cada animação, e lista de diálogos em ordem ("só depois de", "pode repetir").
+- **Quests**: quadro de etapas. Cada etapa tem objetivos (matar mob/MythicMobs, entregar itens com custom
+  model data, entrar em mundo, região do WorldGuard, ir até local, falar com NPC, nível, dinheiro, quebrar,
+  colocar, pescar, fabricar, flag, placeholder...), NPC de entrega, conversas e recompensas.
+- **Skins** e **Speakers**.
+
 ## Iniciar
 
 ```bash
@@ -54,6 +67,8 @@ navegador ──(token)──> server.js ──(token)──> plugin NotEnoughDi
 | Arquivo | O quê |
 |---|---|
 | `index.html`, `editor.css`, `editor.js` | o editor (sem dependências) |
+| `viewer3d.js` | prévia 3D dos NPCs em WebGL puro (lê `.bbmodel`, toca animações, boneco de player com skin) |
+| `npcs.js` | abas de NPCs e Quests |
 | `server.js` | servidor + ponte para a API do plugin |
 | `.env` | endereço do plugin e token |
 | `start.bat` | atalho para iniciar no Windows |
@@ -62,8 +77,10 @@ navegador ──(token)──> server.js ──(token)──> plugin NotEnoughDi
 
 | Rota | |
 |---|---|
-| `GET /api/state` | diálogos (formato grafo), speakers, skins e animações |
-| `POST /api/save` | grava diálogos e speakers e recarrega o plugin |
+| `GET /api/state` | diálogos (formato grafo), speakers, skins, animações, NPCs, quests, modelos do BetterModel, mundos e jogadores online |
+| `POST /api/save` | grava diálogos, speakers, `npcs.yml` e `quests.yml` e recarrega o plugin |
+| `GET /api/model?name=` | `.bbmodel` da pasta `plugins/BetterModel/models` (prévia 3D) |
+| `POST /api/npc-move` | põe o NPC na posição de um jogador online `{id, player}` |
 | `GET /api/skin?name=` | PNG de uma skin salva |
 | `POST /api/skin` | salva skin `{name, slim, data: base64}` |
 | `POST /api/skin-delete` | apaga skin `{name}` |

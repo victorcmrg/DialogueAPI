@@ -77,9 +77,12 @@ const ACTIONS = {
   sound: { l: 'Tocar som', f: ['Som', 'Volume', 'Tom'], d: ['minecraft:entity.player.levelup', '1', '1'], re: /^\[sound\]\s+(\S+)(?:\s+(\S+))?(?:\s+(\S+))?\s*$/i, b: (v) => `[sound] ${v[0]} ${v[1] || 1} ${v[2] || 1}` },
   message: { l: 'Mensagem no chat', f: ['Texto'], d: [''], re: /^\[message\]\s*(.*)$/i, b: (v) => `[message] ${v[0]}` },
   player: { l: 'Comando do jogador', f: ['Comando'], d: [''], re: /^\[player\]\s*(.*)$/i, b: (v) => `[player] ${v[0]}` },
+  questStart: { l: 'Começar quest', f: ['Quest'], d: [''], re: /^\[quest\]\s+start\s+(\S*)\s*$/i, b: (v) => `[quest] start ${v[0]}` },
+  questComplete: { l: 'Concluir etapa da quest', f: ['Quest'], d: [''], re: /^\[quest\]\s+(?:complete|advance)\s+(\S*)\s*$/i, b: (v) => `[quest] complete ${v[0]}` },
+  questReset: { l: 'Zerar quest', f: ['Quest'], d: [''], re: /^\[quest\]\s+reset\s+(\S*)\s*$/i, b: (v) => `[quest] reset ${v[0]}` },
   console: { l: 'Comando do console', f: ['Comando'], d: [''], re: /^(?:\[console\]\s*)?(.*)$/i, b: (v) => v[0] },
 };
-const ACTION_ORDER = ['give', 'points', 'moneyGive', 'moneyTake', 'flagSet', 'flagAdd', 'flagDel', 'sound', 'message', 'player', 'console'];
+const ACTION_ORDER = ['give', 'points', 'moneyGive', 'moneyTake', 'flagSet', 'flagAdd', 'flagDel', 'sound', 'message', 'player', 'questStart', 'questComplete', 'questReset', 'console'];
 
 /** Balão de recompensa: não mostra texto, só roda os gatilhos (item, pontos, dinheiro...) e segue. */
 const REWARD_COLOR = '#f5b942';
@@ -151,6 +154,10 @@ function mcHtml(text, base = '#FFFFFF') {
 // ============================================================
 const S = {
   dialogues: [], speakers: {}, skins: [], animations: [], deleted: [], defaultPitch: 1,
+  mode: 'dialogues',    // 'dialogues' | 'npcs' | 'quests' (o que aparece no meio)
+  npcs: {}, quests: {}, npcSpawned: {}, models: [], loadedModels: [], bettermodel: false,
+  vanillaAnimations: [], entities: [], worlds: [], players: [],
+  curNpc: null, curQuest: null,
   cur: null,            // diálogo aberto {id, oldId, file, data}
   sel: null,            // {k:'node',id} | {k:'link',from,i} | {k:'start'}
   dirty: false,
@@ -279,6 +286,18 @@ async function loadState(keepId) {
   S.skins = json.skins || [];
   S.animations = json.animations || [];
   S.defaultPitch = json.defaultPitch || 1;
+  S.npcs = json.npcs || {};
+  S.quests = json.quests || {};
+  S.npcSpawned = json.npcSpawned || {};
+  S.models = json.models || [];
+  S.loadedModels = json.loadedModels || [];
+  S.bettermodel = !!json.bettermodel;
+  S.vanillaAnimations = json.vanillaAnimations || [];
+  S.entities = json.entities || [];
+  S.worlds = json.worlds || [];
+  S.players = json.players || [];
+  if (S.curNpc && !S.npcs[S.curNpc]) S.curNpc = null;
+  if (S.curQuest && !S.quests[S.curQuest]) S.curQuest = null;
   S.deleted = [];
   S.dirty = false;
   for (const k of Object.keys(faceCache)) if (!k.startsWith('__')) delete faceCache[k];
@@ -310,6 +329,8 @@ async function saveAll() {
     dialogues: S.dialogues.map((d) => ({ id: d.id, oldId: d.oldId, data: cleanForSave(d.data) })),
     deleted: S.deleted,
     speakers: cleanForSave(S.speakers),
+    npcs: cleanForSave(S.npcs),
+    quests: cleanForSave(S.quests),
   };
   try {
     const res = await fetch(apiUrl('save'), { method: 'POST', body: JSON.stringify(payload), headers: { 'Content-Type': 'application/json' } });
@@ -318,7 +339,7 @@ async function saveAll() {
     const keep = S.cur && S.cur.id;
     S.cur = null;
     await loadState(keep);
-    setStatus(`Salvo! ${json.saved} diálogos gravados e recarregados no servidor`, 'ok');
+    setStatus(`Salvo! ${json.saved} diálogos, ${Object.keys(S.npcs).length} NPCs e ${Object.keys(S.quests).length} quests recarregados no servidor`, 'ok');
   } catch (e) {
     setStatus('Erro ao salvar: ' + e.message, 'err');
   }
@@ -341,6 +362,7 @@ function renderSidebar() {
   }
   renderSkinTab();
   renderSpeakerTab();
+  if (window.NED_NPC) { NED_NPC.renderNpcList(); NED_NPC.renderQuestList(); }
 }
 
 function renderSkinTab() {
@@ -538,6 +560,7 @@ function renderAll() {
 function renderCrumbs() {
   const c = $('#crumbs');
   c.innerHTML = '';
+  if (S.mode !== 'dialogues' && window.NED_NPC) return NED_NPC.renderCrumbs(c);
   if (!S.cur) return;
   const input = el('input', { type: 'text', value: S.cur.id, title: 'ID do diálogo (usado no /ned start)', size: Math.max(8, S.cur.id.length + 2) });
   input.addEventListener('change', () => renameDialogue(input.value.trim(), input));
@@ -983,7 +1006,7 @@ window.addEventListener('keydown', (e) => {
   const typing = /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); saveAll(); return; }
   if (e.key === 'Escape') { closeFloating(); return; }
-  if (typing || !S.cur) return;
+  if (typing || !S.cur || S.mode !== 'dialogues') return;
   if (e.key === 'Delete' || e.key === 'Backspace') {
     if (S.sel && S.sel.k === 'node') deleteNode(S.sel.id);
     else if (S.sel && S.sel.k === 'link') removeLink(S.sel.from, S.sel.i);
@@ -995,7 +1018,7 @@ window.addEventListener('beforeunload', (e) => { if (S.dirty) { e.preventDefault
 //  INSPECTOR
 // ============================================================
 function field(label, control, full) {
-  return el('div', { class: 'field' + (full ? ' full' : '') }, label ? el('label', {}, label) : null, control);
+  return el('div', { class: 'field' + (full || !label ? ' full' : '') }, label ? el('label', {}, label) : null, control);
 }
 function section(title, color, ...kids) {
   return el('div', { class: 'section' }, el('h4', {}, color ? el('span', { class: 'sw', style: { background: color } }) : null, title), ...kids);
@@ -1051,6 +1074,7 @@ function segmented(options, current, onpick) {
 function renderInspector() {
   const box = $('#inspector');
   box.innerHTML = '';
+  if (S.mode !== 'dialogues' && window.NED_NPC) return NED_NPC.renderInspector(box);
   if (!S.cur) {
     box.append(el('div', { class: 'section muted' }, 'Nenhum diálogo aberto.'));
     return;
@@ -1071,7 +1095,33 @@ function inspectDialogue(box) {
     field('Permissão', inputText(d, 'permission', { placeholder: 'opcional' }))));
   box.append(section('Requisitos para iniciar', '#ff9f43', requirementsEditor(d, () => renderInspector()),
     field('Mensagem', inputText(d, 'deny-message', { placeholder: 'quando não cumpre' }))));
-  box.append(section('Gatilhos ao iniciar', '#e8c33a', actionsEditor(d, 'start-commands')));
+  // --- paywall ---
+  const pw = d.paywall && typeof d.paywall === 'object' ? d.paywall : null;
+  const pwBox = section('Paywall (pagar para ver)', '#f5c542',
+    el('p', { class: 'hint' }, 'Sem o valor, o jogador recebe a mensagem no chat e o diálogo não abre — até ter o dinheiro.'),
+    field('', (() => {
+      const c = el('input', { type: 'checkbox', checked: !!(pw && pw.enabled !== false) });
+      c.addEventListener('change', () => {
+        if (c.checked) d.paywall = Object.assign({ amount: 100, take: true }, d.paywall || {}, { enabled: true });
+        else if (d.paywall) d.paywall.enabled = false;
+        markDirty(); renderInspector();
+      });
+      return el('label', { class: 'inline' }, c, 'Ativar paywall');
+    })()));
+  if (pw && pw.enabled !== false) {
+    pwBox.append(field('Valor', inputNum(pw, 'amount', { min: 0, placeholder: '100' })),
+      field('', checkBound(pw, 'take', 'Cobrar o valor ao abrir', true)),
+      field('Mensagem', inputText(pw, 'message', { placeholder: 'padrão do lang.yml ({amount} {missing})' })));
+  }
+  box.append(pwBox);
+  // --- comando silencioso ---
+  const cmdInput = inputText(d, 'command', { placeholder: 'ex.: falar_ferreiro' });
+  box.append(section('Abrir por comando', '#a06bff',
+    el('p', { class: 'hint' }, 'O jogador (ou outro plugin com [player]) usa /comando e o diálogo abre. Não aparece no chat nem no console.'),
+    field('Comando /', cmdInput)));
+  box.append(section('Gatilhos ao iniciar', '#e8c33a',
+    el('p', { class: 'hint' }, 'Comandos do console rodam em silêncio (sem resposta no chat nem no console).'),
+    actionsEditor(d, 'start-commands')));
   box.append(section('Gatilhos ao terminar', '#3fbf6f', actionsEditor(d, 'end-commands')));
   box.append(section('Perigo', '#e0473d',
     el('button', { class: 'btn danger wide', onclick: deleteDialogue }, '🗑 Excluir este diálogo')));
@@ -1432,7 +1482,17 @@ function openUpload(onsaved) {
 document.querySelectorAll('.tab').forEach((b) => b.addEventListener('click', () => {
   document.querySelectorAll('.tab').forEach((x) => x.classList.toggle('active', x === b));
   document.querySelectorAll('.tab-body').forEach((x) => x.classList.toggle('hidden', x.id !== 'tab-' + b.dataset.tab));
+  const mode = { dialogues: 'dialogues', npcs: 'npcs', quests: 'quests' }[b.dataset.tab];
+  if (mode) setMode(mode);
 }));
+/** Troca o que aparece no meio: grafo de diálogo, cena 3D do NPC ou quadro da quest. */
+function setMode(mode) {
+  S.mode = mode;
+  document.body.dataset.mode = mode;
+  if (window.NED_NPC) NED_NPC.modeChanged(mode);
+  renderCrumbs();
+  renderInspector();
+}
 $('#dialogue-search').addEventListener('input', renderSidebar);
 $('#btn-save').addEventListener('click', saveAll);
 $('#btn-center').addEventListener('click', centerView);
@@ -1496,6 +1556,7 @@ function askToken(message) {
 }
 
 function start() {
+  document.body.dataset.mode = S.mode;
   if (!TOKEN) return askToken();
   loadState().catch((e) => {
     if (/inv[aá]lid|expir|ausente|403/i.test(e.message)) {

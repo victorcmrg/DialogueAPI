@@ -11,9 +11,11 @@
   <div class="brand"><span class="logo">◆</span> NotEnoughDialogues <span class="muted">· Editor</span></div>
   <div class="crumbs" id="crumbs"></div>
   <div class="top-actions">
-    <button class="btn" id="btn-add-node" title="Novo balão (ou clique direito no fundo)">＋ Balão</button>
-    <button class="btn" id="btn-add-reward" title="Balão de recompensa: dá item, pontos, dinheiro... sem aparecer na tela">🎁 Recompensa</button>
-    <button class="btn" id="btn-center" title="Centralizar">⌖ Centralizar</button>
+    <button class="btn only-dialogues" id="btn-add-node" title="Novo balão (ou clique direito no fundo)">＋ Balão</button>
+    <button class="btn only-dialogues" id="btn-add-reward" title="Balão de recompensa: dá item, pontos, dinheiro... sem aparecer na tela">🎁 Recompensa</button>
+    <button class="btn only-dialogues" id="btn-center" title="Centralizar">⌖ Centralizar</button>
+    <button class="btn only-npcs" id="btn-top-npc" title="Novo NPC">＋ NPC</button>
+    <button class="btn only-quests" id="btn-top-quest" title="Nova quest">＋ Quest</button>
     <span id="status" class="status"></span>
     <button class="btn primary" id="btn-save" title="Ctrl+S">💾 Salvar no servidor</button>
   </div>
@@ -21,9 +23,11 @@
 
 <aside id="sidebar">
   <nav class="tabs">
-    <button class="tab active" data-tab="dialogues">Diálogos</button>
-    <button class="tab" data-tab="skins">Skins</button>
-    <button class="tab" data-tab="speakers">Speakers</button>
+    <button class="tab active" data-tab="dialogues" title="Diálogos">💬<span>Diálogos</span></button>
+    <button class="tab" data-tab="npcs" title="NPCs">🧍<span>NPCs</span></button>
+    <button class="tab" data-tab="quests" title="Quests">📜<span>Quests</span></button>
+    <button class="tab" data-tab="skins" title="Skins">🎭<span>Skins</span></button>
+    <button class="tab" data-tab="speakers" title="Speakers">🗣<span>Speakers</span></button>
   </nav>
   <section class="tab-body" id="tab-dialogues">
     <div class="side-tools">
@@ -31,6 +35,20 @@
       <button class="btn small" id="btn-new-dialogue" title="Novo diálogo">＋</button>
     </div>
     <ul class="list" id="dialogue-list"></ul>
+  </section>
+  <section class="tab-body hidden" id="tab-npcs">
+    <div class="side-tools">
+      <input type="search" id="npc-search" placeholder="Buscar NPC...">
+      <button class="btn small" id="btn-new-npc" title="Novo NPC">＋</button>
+    </div>
+    <ul class="list npc-list" id="npc-list"></ul>
+  </section>
+  <section class="tab-body hidden" id="tab-quests">
+    <div class="side-tools">
+      <input type="search" id="quest-search" placeholder="Buscar quest...">
+      <button class="btn small" id="btn-new-quest" title="Nova quest">＋</button>
+    </div>
+    <ul class="list" id="quest-list"></ul>
   </section>
   <section class="tab-body hidden" id="tab-skins">
     <p class="hint">Skins salvas no servidor. Use o nome delas em qualquer balão ou speaker.</p>
@@ -53,9 +71,31 @@
   <div class="zoom-badge" id="zoom-badge">100%</div>
 </main>
 
+<main id="npc-view" class="hidden">
+  <canvas id="npc-canvas"></canvas>
+  <div id="npc-nametag" class="nametag"></div>
+  <div class="vp-tools">
+    <button class="btn small" id="btn-frame" title="Enquadrar o modelo">⌖</button>
+    <button class="btn small" id="btn-front" title="Vista de frente">Frente</button>
+    <button class="btn small" id="btn-side" title="Vista de lado">Lado</button>
+    <button class="btn small on" id="btn-grid" title="Mostrar/ocultar a grade">#</button>
+  </div>
+  <div class="vp-hint">arrastar: girar · botão direito/shift: mover · scroll: zoom</div>
+  <div id="npc-warn" class="vp-warn"></div>
+  <div id="npc-empty" class="empty">Escolha ou crie um NPC na aba NPCs.</div>
+  <div id="npc-timeline" class="timeline"></div>
+</main>
+
+<main id="quest-view" class="hidden">
+  <div id="quest-board" class="quest-board"></div>
+  <div id="quest-empty" class="empty">Escolha ou crie uma quest na aba Quests.</div>
+</main>
+
 <aside id="inspector"></aside>
 
 <div id="overlay"></div>
 <script src="editor.js"></script>
+<script src="viewer3d.js"></script>
+<script src="npcs.js"></script>
 </body>
 </html>

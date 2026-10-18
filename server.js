@@ -45,6 +45,10 @@ const STATIC = {
   '/editor.css': ['editor.css', 'text/css; charset=utf-8'],
   '/editor/editor.js': ['editor.js', 'application/javascript; charset=utf-8'],
   '/editor/editor.css': ['editor.css', 'text/css; charset=utf-8'],
+  '/viewer3d.js': ['viewer3d.js', 'application/javascript; charset=utf-8'],
+  '/npcs.js': ['npcs.js', 'application/javascript; charset=utf-8'],
+  '/editor/viewer3d.js': ['viewer3d.js', 'application/javascript; charset=utf-8'],
+  '/editor/npcs.js': ['npcs.js', 'application/javascript; charset=utf-8'],
 };
 
 function send(res, code, type, body) {
